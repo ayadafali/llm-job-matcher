@@ -1,0 +1,21 @@
+# Données (volumineuses ou personnelles)
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/cv/
+data/raw/cv/*
+!data/raw/cv/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+*.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.ipynb_checkpoints/
+
+# Système
+.DS_Store
+Thumbs.db

@@ -1,0 +1,9 @@
+pandas
+numpy
+pdfplumber
+openai
+pydantic
+sentence-transformers
+scikit-learn
+streamlit
+plotly
