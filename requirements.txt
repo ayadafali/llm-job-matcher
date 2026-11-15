@@ -1,9 +1,12 @@
 pandas
 numpy
 pdfplumber
+requests
+python-dotenv
 openai
 pydantic
 sentence-transformers
 scikit-learn
 streamlit
 plotly
+pytest
