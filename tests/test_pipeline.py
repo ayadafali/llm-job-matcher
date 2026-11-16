@@ -17,6 +17,7 @@ from tests.test_ingestion import env  # noqa: F401  (fixture : LinkedIn simulé 
 def env_complet(env, monkeypatch):  # noqa: F811
     raw = env / "raw"
     monkeypatch.setattr(dj, "FICHIER", raw / "data_jobs.parquet")
+    monkeypatch.setattr(ingestion, "SOURCE_NATIONALE", "data_jobs")
     pd.DataFrame({
         "job_title_short": ["Data Analyst", "Data Scientist", "Data Engineer", "Data Analyst", "Software Engineer", "Data Analyst"],
         "job_title": ["Data Analyst F/H", "Stage Data Scientist", "Data Engineer Senior", "Junior Data Analyst", "Dev Java", "Data Analyst"],
@@ -88,6 +89,32 @@ def test_pipeline_complet(env_complet, monkeypatch):
     assert 0 < aggregation.taux_couverture("aya", "nationale") < 1
     assert not aggregation.comparaison_methodes().empty
     assert set(aggregation.salaires("nationale")["devise"]) == {"USD"}
+
+
+def test_bascule_data_jobs_vers_france_travail(env_complet, monkeypatch):
+    """Passage de la source de secours à France Travail : purge, puis ingestion « all »."""
+    from src.sources import france_travail as ft
+    from tests.test_ingestion import FausseSession
+
+    monkeypatch.setattr(llm_client, "chat_json", FauxLLM())
+    monkeypatch.setattr(scoring, "encoder", faux_encoder)
+    ingestion.ingerer("all")                                   # LinkedIn + data_jobs
+    storage.enregistrer_profil({"profil_id": "aya", "texte_brut": "Python, SQL"})
+    extraction.extraire_offres()
+    scoring.calculer()
+
+    session, vraie_collecte = FausseSession(), ft.collecter
+    monkeypatch.setattr(ft, "collecter", lambda: vraie_collecte(mots_cles=["data scientist"], session=session))
+    monkeypatch.setattr(ingestion, "SOURCE_NATIONALE", "france_travail")
+    with pytest.raises(RuntimeError, match="purger data_jobs"):
+        ingestion.ingerer("all")                               # refus : deux sources nationales
+
+    assert storage.supprimer_source("data_jobs") == 4
+    assert storage.lire("SELECT COUNT(*) n FROM matchings WHERE offre_id LIKE 'dj_%'")["n"][0] == 0
+    ingestion.ingerer("all")
+    assert set(storage.lire("SELECT DISTINCT source FROM offres WHERE echelle='nationale'")["source"]) \
+        == {"france_travail"}
+    assert len(storage.offres_non_extraites("nationale")) == 2  # 2 offres data FT, à passer au LLM
 
 
 def test_normalisation():

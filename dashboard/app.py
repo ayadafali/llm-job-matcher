@@ -15,7 +15,8 @@ from src import aggregation, storage  # noqa: E402
 
 # Couleurs : une teinte fixe par échelle (identité), texte en encre neutre, grille discrète.
 COULEURS = {"internationale": "#2a78d6", "nationale": "#eb6834"}
-LIBELLES = {"internationale": "International (LinkedIn)", "nationale": "France (data_jobs)"}
+LIBELLES = {"internationale": "International (LinkedIn)", "nationale": "France"}
+NOMS_SOURCES = {"france_travail": "France Travail", "data_jobs": "data_jobs", "linkedin": "LinkedIn"}
 NEUTRE, ENCRE, ENCRE_2, GRILLE = "#a8a69f", "#0b0b0b", "#52514e", "#e8e7e3"
 
 
@@ -44,8 +45,12 @@ if vue.empty:
     st.warning("La base est vide : lance d'abord `python -m src.ingestion`.")
     st.stop()
 
+sources_nat = vue.loc[vue["echelle"] == "nationale", "source"].tolist()
+if sources_nat:
+    LIBELLES["nationale"] = "France (" + ", ".join(NOMS_SOURCES.get(s, s) for s in sources_nat) + ")"
+
 profils = storage.profils()
-echelles = [e for e in ("internationale", "nationale") if e in set(vue["echelle"])]
+echelles =[e for e in ("internationale", "nationale") if e in set(vue["echelle"])]
 
 onglets = st.tabs(["Vue d'ensemble", "Compétences demandées", "Matching", "Écart de compétences",
                    "Salaires", "Comparaison des méthodes"])
@@ -89,8 +94,11 @@ with onglets[1]:
                         hovertemplate="%{y} : %{x:.0f} % des offres<extra>" + LIBELLES[e] + "</extra>")
         fig.update_layout(barmode="group", xaxis_title="% des offres qui citent la compétence",
                           legend_traceorder="reversed")
-        st.caption("Attention : les compétences internationales sont extraites par le LLM, celles de France "
-                   "par le dataset source. Les écarts reflètent aussi cette différence de méthode.")
+        if "data_jobs" in sources_nat:
+            st.caption("Attention : les compétences internationales sont extraites par le LLM, celles de France "
+                       "par le dataset source. Les écarts reflètent aussi cette différence de méthode.")
+        else:
+            st.caption("Compétences extraites par le même LLM local pour les deux échelles.")
         st.plotly_chart(style(fig, 40 + 34 * len(comp)), width="stretch")
         with st.expander("Tableau"):
             st.dataframe(comp.iloc[::-1], width="stretch", hide_index=True)

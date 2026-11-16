@@ -35,6 +35,10 @@ TITRES_CIBLES_EN = (
 )
 NIVEAUX_CIBLES_LINKEDIN = ["Internship", "Entry level", "Associate"]
 
+# --- Source utilisée pour l'échelle nationale ---
+# "france_travail" (accès accordé le 16/11/2026) ou "data_jobs" (solution de secours, sans descriptions)
+SOURCE_NATIONALE = os.getenv("SOURCE_NATIONALE", "france_travail")
+
 # --- Échelle nationale : API Offres d'emploi v2 (France Travail) ---
 # Identifiants à créer sur https://francetravail.io (application + abonnement à l'API).
 # Ne jamais les écrire ici : les mettre dans un fichier .env (ignoré par Git).

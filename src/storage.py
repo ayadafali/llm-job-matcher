@@ -214,6 +214,15 @@ def profils() -> pd.DataFrame:
     return df
 
 
+def supprimer_source(source: str) -> int:
+    """Retire une source de la base, avec ses extractions, scores et suivis."""
+    sous_requete = "SELECT offre_id FROM offres WHERE source = ?"
+    with connexion() as conn:
+        for table in ("matchings", "suivi", "offres_extraites"):
+            conn.execute(f"DELETE FROM {table} WHERE offre_id IN ({sous_requete})", (source,))
+        return conn.execute("DELETE FROM offres WHERE source = ?", (source,)).rowcount
+
+
 def resume_offres() -> pd.DataFrame:
     """Vue d'ensemble par échelle : volume, taux de salaire renseigné, contrats."""
     return lire(

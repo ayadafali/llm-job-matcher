@@ -5,12 +5,13 @@ Pipeline de matching CV / offres d'emploi avec un LLM local (LM Studio), sur deu
 | Échelle | Source | Contenu | Rôle du LLM |
 |---|---|---|---|
 | Internationale | [LinkedIn Job Postings 2023-2024](https://www.kaggle.com/datasets/arshkon/linkedin-job-postings) (Kaggle) | descriptions complètes, en anglais | extrait compétences, niveau, contrat, résumé |
-| Nationale (France) | [data_jobs](https://huggingface.co/datasets/lukebarousse/data_jobs) (Hugging Face, Apache-2.0), offres France 2023 | titres + compétences déjà extraites | aucun (compétences reprises de la source) |
+| Nationale (France) | [API Offres d'emploi v2](https://www.data.gouv.fr/dataservices/api-offres-demploi) de France Travail, offres actives | descriptions complètes, en français | extrait compétences, niveau, contrat, résumé |
+| Nationale, secours | [data_jobs](https://huggingface.co/datasets/lukebarousse/data_jobs) (Hugging Face, Apache-2.0), offres France 2023 | titres + compétences déjà extraites | aucun |
 
-L'[API Offres d'emploi de France Travail](https://www.data.gouv.fr/dataservices/api-offres-demploi),
-prévue au départ pour l'échelle nationale, est passée en accès sous conditions en octobre 2026.
-Une demande d'accès a été envoyée le 15/11/2026 ; le connecteur `src/sources/france_travail.py`
-est prêt et testé pour le jour où l'accès est accordé.
+L'API France Travail est en accès sous conditions depuis octobre 2026. Accès demandé le 15/11/2026,
+accordé le 16/11/2026 pour l'usage déclaré (projet universitaire, ~1 000 offres, conservation locale,
+LLM exécuté en local). Toute évolution de cet usage doit être signalée à France Travail avant sa mise en œuvre.
+Source des offres nationales : France Travail, avec la date d'extraction (nom du fichier JSON).
 
 > Aucun modèle n'est entraîné : le LLM (Qwen2.5-7B-Instruct) est utilisé tel quel avec un prompt
 > et une sortie JSON validée ; les embeddings (multilingual-e5-base) sont un modèle pré-entraîné.
@@ -36,14 +37,15 @@ pip install -r requirements.txt
 # 0. Données (une seule fois)
 #    - postings.csv (+ jobs/job_skills.csv, mappings/skills.csv) de Kaggle dans data/raw/
 #    - CV en PDF dans data/raw/cv/
-python -m src.sources.data_jobs --telecharger     # télécharge data_jobs (~230 Mo)
+#    - identifiants France Travail dans .env (voir .env.example)
 
 # 1. Ingestion
-python -m src.ingestion                           # LinkedIn + data_jobs (France) + CV
+python -m src.ingestion                           # LinkedIn + France Travail + CV
+python -m src.ingestion --purger data_jobs        # si data_jobs avait été ingéré avant
 
 # 2. Extraction (LM Studio lancé, serveur démarré)
 python -m src.extraction --test                   # vérifie que LM Studio répond
-python -m src.extraction --offres --echelle nationale            # instantané (sans LLM)
+python -m src.extraction --offres --echelle nationale --limite 150      # relançable
 python -m src.extraction --offres --echelle internationale --limite 20   # essai
 python -m src.extraction --offres --echelle internationale --limite 200  # relançable
 python -m src.extraction --cv
@@ -63,7 +65,6 @@ python -m pytest -q
 
 ## Limites connues
 
-- Les deux échelles ne sont pas extraites de la même façon (LLM pour LinkedIn, compétences fournies par
-  la source pour data_jobs) : une partie des écarts de compétences vient de cette différence de méthode.
-- Salaires en USD dans les deux datasets, comparés seulement à l'intérieur d'une échelle.
-- Offres datées (2023-2024).
+- Les deux échelles n'ont pas la même date : LinkedIn 2023-2024, France Travail = offres actives à la collecte.
+- Salaires en USD (LinkedIn) et en EUR (France Travail) : comparés seulement à l'intérieur d'une échelle.
+- Avec la source de secours data_jobs, les compétences françaises ne passent pas par le LLM.
