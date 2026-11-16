@@ -182,6 +182,38 @@ def offres_non_extraites(echelle: str | None = None, limite: int | None = None) 
     return lire(sql, params)
 
 
+def enregistrer_extraction(extraction: dict) -> int:
+    return _upsert("offres_extraites", [{k: _propre(v) for k, v in extraction.items()}], ["offre_id"])
+
+
+def profils_non_extraits() -> pd.DataFrame:
+    return lire("SELECT * FROM profils WHERE competences IS NULL ORDER BY profil_id")
+
+
+def enregistrer_matchings(lignes: list[dict]) -> int:
+    return _upsert("matchings", [{k: _propre(v) for k, v in l.items()} for l in lignes],
+                   ["profil_id", "offre_id"])
+
+
+def offres_avec_extraction(echelle: str | None = None) -> pd.DataFrame:
+    """Offres déjà passées par l'étape 2, avec leurs compétences sous forme de liste Python."""
+    sql = ("SELECT o.*, e.competences_requises, e.niveau_exp, e.type_contrat AS contrat_extrait, "
+           "e.resume, e.modele FROM offres o JOIN offres_extraites e USING (offre_id)")
+    params = []
+    if echelle:
+        sql += " WHERE o.echelle = ?"
+        params.append(echelle)
+    df = lire(sql, params)
+    df["competences"] = df["competences_requises"].apply(lambda s: json.loads(s) if s else [])
+    return df
+
+
+def profils() -> pd.DataFrame:
+    df = lire("SELECT * FROM profils ORDER BY profil_id")
+    df["competences"] = df["competences"].apply(lambda s: json.loads(s) if s else [])
+    return df
+
+
 def resume_offres() -> pd.DataFrame:
     """Vue d'ensemble par échelle : volume, taux de salaire renseigné, contrats."""
     return lire(

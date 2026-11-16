@@ -1,8 +1,10 @@
 pandas
 numpy
+pyarrow
 pdfplumber
 requests
 python-dotenv
+datasets
 openai
 pydantic
 sentence-transformers

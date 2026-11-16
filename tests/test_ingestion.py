@@ -168,7 +168,8 @@ def test_bout_en_bout(env, monkeypatch):
     session, vraie_collecte = FausseSession(), ft.collecter
     monkeypatch.setattr(ft, "collecter", lambda: vraie_collecte(
         mots_cles=["data analyst", "data scientist"], session=session))
-    ingestion.ingerer("all")
+    ingestion.ingerer("linkedin")
+    ingestion.ingerer("france_travail")
 
     resume = storage.resume_offres().set_index("echelle")
     assert resume.loc["internationale", "nb_offres"] == 3      # Sales Rep exclu
