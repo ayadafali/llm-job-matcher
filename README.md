@@ -21,7 +21,9 @@ Source des offres nationales : France Travail, avec la date d'extraction (nom du
 1. **Ingestion** (`src/ingestion.py`, `src/sources/`) : chargement, filtrage des postes data, schéma commun, SQLite.
 2. **Extraction** (`src/extraction.py`, `src/llm_client.py`) : JSON structuré par le LLM local, normalisation des compétences.
 3. **Scoring** (`src/scoring.py`) : 3 méthodes comparées — règles (part des compétences possédées), embeddings
-   (similarité cosinus), jugement du LLM (optionnel, sur les meilleures offres). Score final = 0,6 règles + 0,4 embeddings.
+   (similarité cosinus), jugement du LLM (optionnel, sur les meilleures offres). Score final = 0,6 règles + 0,4 embeddings,
+   multiplié par une pénalité de niveau (offre Confirmé ×0,75 / Senior ×0,5 pour un profil junior, réglable via
+   `PROFIL_NIVEAU`) et une pénalité d'incompatibilité (habilitation de sécurité, bénévolat ×0,3).
 4. **Agrégation** (`src/aggregation.py`) : compétences les plus demandées par échelle, écart profil / marché, salaires.
 5. **Dashboard** (`dashboard/app.py`) : Streamlit.
 
@@ -54,7 +56,13 @@ python -m src.extraction --cv
 python -m src.scoring                             # rapide
 python -m src.scoring --llm-top 10                # + avis du LLM sur 10 offres par échelle
 
-# 4. Dashboard
+# 4. Évaluation
+python -m src.evaluation --preparer               # crée eval/annotation_matching.csv et eval/controle_extraction.csv
+#    -> remplir à la main (Excel) : pertinence 2/1/0 ; ok_competences / ok_niveau / ok_contrat 1/0
+python -m src.evaluation --calculer               # précision@10, nDCG@10, Spearman, champs corrects, journal LLM
+python -m src.evaluation --modeles qwen2.5-7b-instruct qwen2.5-3b-instruct --n 30   # comparaison LM Studio
+
+# 5. Dashboard
 streamlit run dashboard/app.py
 
 # Tests (données simulées, sans LM Studio)

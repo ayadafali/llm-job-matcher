@@ -35,7 +35,8 @@ def env_complet(env, monkeypatch):  # noqa: F811
 
 
 class FauxLLM:
-    def __call__(self, systeme, utilisateur, schema):
+    def __call__(self, systeme, utilisateur, schema, **kwargs):
+        llm_client.dernier_appel.update(essais=1, succes=True, duree_s=0.01, erreur=None)
         if schema is extraction.OffreExtraite:
             comp = ["Python", "SQL"] if "SQL" in utilisateur or "ML" in utilisateur else ["Power BI", "MS Excel"]
             return schema(competences=comp, niveau_experience="Débutant", annees_experience_min=0,

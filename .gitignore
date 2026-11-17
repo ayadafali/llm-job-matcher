@@ -19,3 +19,9 @@ venv/
 # Système
 .DS_Store
 Thumbs.db
+
+# Évaluation : fichiers contenant des extraits d'offres (France Travail) -> locaux uniquement
+eval/annotation_matching.csv
+eval/controle_extraction.csv
+models/comparaison_modeles_details.csv
+.pytest_cache/

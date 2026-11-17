@@ -106,10 +106,10 @@ def normaliser_liste(competences) -> list[str]:
 
 # --- Offres -----------------------------------------------------------------------------------
 
-def extraire_offre(offre: dict) -> OffreExtraite:
+def extraire_offre(offre: dict, modele: str | None = None) -> OffreExtraite:
     texte = f"Intitulé : {offre['titre']}\nEntreprise : {offre.get('entreprise') or ''}\n\n" \
             f"{(offre.get('description') or '')[:TAILLE_MAX_TEXTE]}"
-    return llm_client.chat_json(PROMPT_OFFRE, texte, OffreExtraite)
+    return llm_client.chat_json(PROMPT_OFFRE, texte, OffreExtraite, modele=modele)
 
 
 def extraire_offres(echelle: str | None = None, limite: int | None = None) -> int:
@@ -129,12 +129,21 @@ def extraire_offres(echelle: str | None = None, limite: int | None = None) -> in
                 "modele": "source:data_jobs",
             }
         else:
+            llm_client.dernier_appel.clear()
             try:
                 x = extraire_offre(offre)
             except Exception as e:   # une offre en échec ne bloque pas les autres
                 erreurs += 1
                 print(f"  ! {offre['offre_id']} : {e}")
+                storage.journaliser({"offre_id": offre["offre_id"], "modele": LLM_MODEL, "succes": 0,
+                                     "essais": llm_client.dernier_appel.get("essais"),
+                                     "duree_s": llm_client.dernier_appel.get("duree_s"),
+                                     "erreur": str(e)[:300]})
                 continue
+            storage.journaliser({"offre_id": offre["offre_id"], "modele": LLM_MODEL, "succes": 1,
+                                 "essais": llm_client.dernier_appel.get("essais"),
+                                 "duree_s": llm_client.dernier_appel.get("duree_s"),
+                                 "nb_competences": len(x.competences)})
             ligne = {
                 "offre_id": offre["offre_id"],
                 "competences_requises": normaliser_liste(x.competences),

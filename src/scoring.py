@@ -6,7 +6,9 @@
 3. LLM direct  : (optionnel, sur les meilleures offres seulement) le LLM local note l'adéquation
                  de 0 à 100 et justifie.
 
-Score final = 0,6 x règles + 0,4 x embeddings (remis à l'échelle 0-1 pour chaque profil).
+Score final = (0,6 x règles + 0,4 x embeddings remis à l'échelle 0-1 pour chaque profil)
+              x pénalité de niveau (offre Confirmé/Senior pour un profil junior)
+              x pénalité d'incompatibilité (habilitation de sécurité, bénévolat).
 
 Exemples :
     python -m src.scoring                    # tous les profils, toutes les offres extraites
@@ -20,7 +22,7 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 from src import llm_client, storage
-from src.config import EMBEDDING_MODEL
+from src.config import EMBEDDING_MODEL, PROFIL_NIVEAU
 
 POIDS_REGLES, POIDS_EMBEDDING = 0.6, 0.4
 
@@ -62,6 +64,40 @@ def score_regles(comp_offre: list[str], comp_cv: set[str], texte_cv: str) -> tup
     return len(acquises) / len(comp_offre), acquises, manquantes
 
 
+# --- Règles métier : niveau d'expérience et offres incompatibles ------------------------------
+
+ORDRE_NIVEAUX = {"Stage": 0, "Débutant": 1, "Junior": 2, "Confirmé": 3, "Senior": 4}
+# Pénalité selon le nombre de niveaux qui séparent l'offre (au-dessus) du profil
+PENALITE_ECART = {1: 0.75, 2: 0.5}
+PENALITE_ECART_MAX = 0.5
+
+# Offres qu'un profil étudiant ne peut pas viser, quelles que soient ses compétences
+EXCLUSIONS = [
+    (r"clearance|ts/sci|top secret|secret clearance|habilitation (?:secret|défense)", "habilitation de sécurité exigée"),
+    (r"\bvolunteer\b|\bbénévol", "poste bénévole"),
+]
+PENALITE_EXCLUSION = 0.3
+
+
+def facteur_niveau(niveau_offre: str | None, niveau_profil: str = PROFIL_NIVEAU) -> tuple[float, str]:
+    """1 si l'offre est au niveau du profil ou en dessous, pénalité sinon. Niveau inconnu : pas de pénalité."""
+    if niveau_offre not in ORDRE_NIVEAUX:
+        return 1.0, ""
+    ecart = ORDRE_NIVEAUX[niveau_offre] - ORDRE_NIVEAUX[niveau_profil]
+    if ecart <= 0:
+        return 1.0, ""
+    f = PENALITE_ECART.get(ecart, PENALITE_ECART_MAX)
+    return f, f"niveau {niveau_offre} pour un profil {niveau_profil} (×{f:g})."
+
+
+def facteur_exclusion(titre: str | None, description: str | None) -> tuple[float, str]:
+    texte = f"{titre or ''} {(description or '')[:3000]}".lower()
+    for motif, raison in EXCLUSIONS:
+        if re.search(motif, texte):
+            return PENALITE_EXCLUSION, f"{raison} (×{PENALITE_EXCLUSION:g})."
+    return 1.0, ""
+
+
 class JugementLLM(BaseModel):
     score: int = Field(description="Adéquation du profil à l'offre, de 0 à 100")
     justification: str = Field(description="Deux phrases au plus, en français")
@@ -98,13 +134,18 @@ def calculer(llm_top: int = 0) -> pd.DataFrame:
         lignes = []
         for o, c, c01 in zip(offres.to_dict("records"), cos, cos_01):
             regles, acquises, manquantes = score_regles(o["competences"], comp_cv, texte_cv)
-            final = c01 if regles is None else POIDS_REGLES * regles + POIDS_EMBEDDING * c01
+            base = c01 if regles is None else POIDS_REGLES * regles + POIDS_EMBEDDING * c01
+            f_niveau, motif_niveau = facteur_niveau(o.get("niveau_exp") or o.get("niveau_experience"))
+            f_exclu, motif_exclu = facteur_exclusion(o["titre"], o.get("description"))
+            final = base * f_niveau * f_exclu
+            ajustements = " ".join(m for m in (motif_niveau, motif_exclu) if m)
             lignes.append({
                 "profil_id": p["profil_id"], "offre_id": o["offre_id"], "echelle": o["echelle"],
                 "score_embedding": round(float(c), 4), "score_regles": None if regles is None else round(regles, 4),
                 "score_llm": None, "score_final": round(float(final), 4),
                 "justification": f"Acquises : {', '.join(acquises) or 'aucune'}. "
-                                 f"Manquantes : {', '.join(manquantes) or 'aucune'}.",
+                                 f"Manquantes : {', '.join(manquantes) or 'aucune'}."
+                                 + (f" Ajustement : {ajustements}" if ajustements else ""),
             })
 
         if llm_top:

@@ -83,6 +83,18 @@ CREATE TABLE IF NOT EXISTS matchings (
     PRIMARY KEY (profil_id, offre_id)
 );
 
+CREATE TABLE IF NOT EXISTS journal_extraction (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    offre_id            TEXT,
+    modele              TEXT,
+    succes              INTEGER,      -- 1 = JSON valide obtenu
+    essais              INTEGER,      -- 1 = valide du premier coup
+    duree_s             REAL,
+    nb_competences      INTEGER,
+    erreur              TEXT,
+    date                TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS suivi (
     profil_id           TEXT REFERENCES profils(profil_id),
     offre_id            TEXT REFERENCES offres(offre_id),
@@ -184,6 +196,13 @@ def offres_non_extraites(echelle: str | None = None, limite: int | None = None) 
 
 def enregistrer_extraction(extraction: dict) -> int:
     return _upsert("offres_extraites", [{k: _propre(v) for k, v in extraction.items()}], ["offre_id"])
+
+
+def journaliser(ligne: dict):
+    cols = list(ligne)
+    with connexion() as conn:
+        conn.execute(f"INSERT INTO journal_extraction ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
+                     [_propre(ligne[c]) for c in cols])
 
 
 def profils_non_extraits() -> pd.DataFrame:

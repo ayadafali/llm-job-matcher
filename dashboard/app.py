@@ -8,6 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import pandas as pd  # noqa: E402
 import plotly.graph_objects as go  # noqa: E402
 import streamlit as st  # noqa: E402
 
@@ -53,7 +54,7 @@ profils = storage.profils()
 echelles =[e for e in ("internationale", "nationale") if e in set(vue["echelle"])]
 
 onglets = st.tabs(["Vue d'ensemble", "Compétences demandées", "Matching", "Écart de compétences",
-                   "Salaires", "Comparaison des méthodes"])
+                   "Salaires", "Comparaison des méthodes", "Évaluation"])
 
 # --- 1. Vue d'ensemble ---------------------------------------------------------------------------
 with onglets[0]:
@@ -91,6 +92,7 @@ with onglets[1]:
         for e in reversed(echelles):   # en barres horizontales, la première série s'affiche en bas
             fig.add_bar(y=comp["competence"], x=comp[e] * 100, name=LIBELLES[e], orientation="h",
                         marker_color=COULEURS[e],
+                        error_x=dict(type="data", array=comp[f"ic95_{e}"] * 100, color=NEUTRE, thickness=1.2, width=3),
                         hovertemplate="%{y} : %{x:.0f} % des offres<extra>" + LIBELLES[e] + "</extra>")
         fig.update_layout(barmode="group", xaxis_title="% des offres qui citent la compétence",
                           legend_traceorder="reversed")
@@ -99,6 +101,9 @@ with onglets[1]:
                        "par le dataset source. Les écarts reflètent aussi cette différence de méthode.")
         else:
             st.caption("Compétences extraites par le même LLM local pour les deux échelles.")
+        st.caption("Traits gris : intervalle de confiance à 95 %. Écarts France / international "
+                   "statistiquement significatifs : "
+                   + (", ".join(comp.loc[comp["ecart_significatif"], "competence"].iloc[::-1]) or "aucun") + ".")
         st.plotly_chart(style(fig, 40 + 34 * len(comp)), width="stretch")
         with st.expander("Tableau"):
             st.dataframe(comp.iloc[::-1], width="stretch", hide_index=True)
@@ -188,3 +193,29 @@ with onglets[5]:
         fig.update_layout(xaxis_title="Score règles (part des compétences possédées)",
                           yaxis_title="Similarité embeddings (cosinus)")
         st.plotly_chart(style(fig, 460), width="stretch")
+
+# --- 7. Évaluation ---------------------------------------------------------------------------------
+with onglets[6]:
+    from src.evaluation import EVAL_DIR, MODELS_DIR, stats_journal
+
+    def afficher_csv(chemin, titre, vide):
+        st.markdown(f"#### {titre}")
+        if chemin.exists():
+            st.dataframe(pd.read_csv(chemin, sep=";", encoding="utf-8-sig"), hide_index=True, width="stretch")
+        else:
+            st.info(vide)
+
+    afficher_csv(EVAL_DIR / "resultats_matching.csv", "Qualité du matching (offres annotées à la main)",
+                 "Annoter eval/annotation_matching.csv puis lancer `python -m src.evaluation --calculer`.")
+    st.caption("Précision@10 : part d'offres pertinentes parmi les 10 premières selon la méthode. "
+               "nDCG@10 : qualité de l'ordre (1 = ordre idéal). Spearman : accord entre score et annotation.")
+    afficher_csv(EVAL_DIR / "resultats_extraction.csv", "Qualité de l'extraction (vérification manuelle)",
+                 "Remplir eval/controle_extraction.csv puis lancer `python -m src.evaluation --calculer`.")
+    st.markdown("#### Fiabilité et vitesse du LLM local (journal d'extraction)")
+    j = stats_journal()
+    if j.empty:
+        st.info("Le journal se remplit lors des prochaines extractions.")
+    else:
+        st.dataframe(j, hide_index=True, width="stretch")
+    afficher_csv(MODELS_DIR / "comparaison_modeles.csv", "Comparaison de modèles dans LM Studio",
+                 "Lancer `python -m src.evaluation --modeles <modèle 1> <modèle 2> --n 30`.")

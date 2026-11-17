@@ -2,6 +2,7 @@
 
 Les salaires ne sont comparés qu'à l'intérieur d'une même échelle (devises et années différentes).
 """
+import numpy as np
 import pandas as pd
 
 from src import storage
@@ -42,6 +43,13 @@ def comparaison_competences(n: int = 15) -> pd.DataFrame:
                        "internationale": [inter.get(c, 0.0) for c in tops],
                        "nationale": [nat.get(c, 0.0) for c in tops]})
     df["ecart"] = df["nationale"] - df["internationale"]
+    # Intervalle de confiance à 95 % de chaque part (approximation normale) et significativité de l'écart
+    n = {e: len(storage.offres_avec_extraction(e)) for e in ("internationale", "nationale")}
+    for e in ("internationale", "nationale"):
+        df[f"ic95_{e}"] = (1.96 * np.sqrt(df[e] * (1 - df[e]) / max(n[e], 1))).round(3)
+    se_ecart = np.sqrt(df["internationale"] * (1 - df["internationale"]) / max(n["internationale"], 1)
+                       + df["nationale"] * (1 - df["nationale"]) / max(n["nationale"], 1))
+    df["ecart_significatif"] = (df["ecart"].abs() > 1.96 * se_ecart) & (se_ecart > 0)
     return df.sort_values("internationale", ascending=False).reset_index(drop=True)
 
 

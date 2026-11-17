@@ -21,6 +21,10 @@ LM_STUDIO_URL = "http://localhost:1234/v1"
 LLM_MODEL = "qwen2.5-7b-instruct"  # identifiant affiché dans LM Studio
 LLM_TEMPERATURE = 0.0
 
+# --- Niveau du profil évalué (pénalise les offres Confirmé / Senior dans le scoring) ---
+# Stage, Débutant, Junior, Confirmé ou Senior
+PROFIL_NIVEAU = os.getenv("PROFIL_NIVEAU", "Junior")
+
 # --- Embeddings (multilingue : offres en anglais ET en français) ---
 EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
 

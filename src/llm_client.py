@@ -37,7 +37,13 @@ def _json_depuis_texte(texte: str) -> dict:
     return json.loads(texte[debut:fin + 1] if debut >= 0 else texte)
 
 
-def chat_json(systeme: str, utilisateur: str, schema: type[BaseModel], essais: int = 3) -> BaseModel:
+# Statistiques du dernier appel (lues par le journal d'extraction) :
+# essais = nombre de tentatives (1 = JSON valide du premier coup), succes, duree_s, erreur
+dernier_appel: dict = {}
+
+
+def chat_json(systeme: str, utilisateur: str, schema: type[BaseModel], essais: int = 3,
+              modele: str | None = None) -> BaseModel:
     """Appelle le LLM et renvoie une instance validée de `schema`.
 
     On demande d'abord une sortie JSON contrainte par le schéma ; si le modèle ou la version de
@@ -49,14 +55,19 @@ def chat_json(systeme: str, utilisateur: str, schema: type[BaseModel], essais: i
         "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema(), "strict": True},
     }
     derniere_erreur = None
+    debut = time.time()
     for essai in range(essais):
         try:
-            kwargs = dict(model=LLM_MODEL, messages=messages, temperature=LLM_TEMPERATURE)
+            kwargs = dict(model=modele or LLM_MODEL, messages=messages, temperature=LLM_TEMPERATURE)
             if essai < essais - 1:
                 kwargs["response_format"] = format_strict
             rep = client().chat.completions.create(**kwargs)
-            return schema.model_validate(_json_depuis_texte(rep.choices[0].message.content))
+            resultat = schema.model_validate(_json_depuis_texte(rep.choices[0].message.content))
+            dernier_appel.update(essais=essai + 1, succes=True, duree_s=round(time.time() - debut, 2), erreur=None)
+            return resultat
         except (ValidationError, json.JSONDecodeError, ValueError) as e:
             derniere_erreur = e
             time.sleep(0.5)
+    dernier_appel.update(essais=essais, succes=False, duree_s=round(time.time() - debut, 2),
+                         erreur=str(derniere_erreur)[:300])
     raise RuntimeError(f"Réponse LLM invalide après {essais} essais : {derniere_erreur}")
