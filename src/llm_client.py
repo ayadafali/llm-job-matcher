@@ -38,7 +38,8 @@ def _json_depuis_texte(texte: str) -> dict:
 
 
 # Statistiques du dernier appel (lues par le journal d'extraction) :
-# essais = nombre de tentatives (1 = JSON valide du premier coup), succes, duree_s, erreur
+# essais = nombre de tentatives (1 = JSON valide du premier coup), succes, duree_s, erreur,
+# modele_servi = modèle qui a réellement répondu (renvoyé par LM Studio)
 dernier_appel: dict = {}
 
 
@@ -63,7 +64,8 @@ def chat_json(systeme: str, utilisateur: str, schema: type[BaseModel], essais: i
                 kwargs["response_format"] = format_strict
             rep = client().chat.completions.create(**kwargs)
             resultat = schema.model_validate(_json_depuis_texte(rep.choices[0].message.content))
-            dernier_appel.update(essais=essai + 1, succes=True, duree_s=round(time.time() - debut, 2), erreur=None)
+            dernier_appel.update(essais=essai + 1, succes=True, duree_s=round(time.time() - debut, 2), erreur=None,
+                                 modele_servi=getattr(rep, "model", None))
             return resultat
         except (ValidationError, json.JSONDecodeError, ValueError) as e:
             derniere_erreur = e

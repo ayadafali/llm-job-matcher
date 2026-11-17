@@ -77,4 +77,26 @@ def test_comparer_modeles(base_notee):
     r = evaluation.comparer_modeles(["modele-a", "modele-b"], n=4)
     assert list(r["modele"]) == ["modele-a", "modele-b"]
     assert (r["accord_competences_jaccard"] == 1.0).all()        # faux LLM identique pour les deux
+    assert (r["accord_niveau"] == 1.0).all() and (r["accord_contrat"] == 1.0).all()
+    assert evaluation._egal(None, float("nan")) and not evaluation._egal(None, "CDI")
     assert (evaluation.MODELS_DIR / "comparaison_modeles.csv").exists()
+
+
+def test_comparer_modeles_avec_echec(base_notee, monkeypatch):
+    """Une offre ratée par la référence : pas de fausse alerte, et exclue des taux d'accord."""
+    vrai, appels = llm_client.chat_json, {"n": 0}
+
+    def llm_avec_echec(*a, **k):
+        appels["n"] += 1
+        if appels["n"] == 1:
+            llm_client.dernier_appel.update(essais=3, succes=False, duree_s=0.1, erreur="x")
+            raise RuntimeError("JSON invalide")
+        r = vrai(*a, **k)
+        llm_client.dernier_appel["modele_servi"] = k.get("modele")
+        return r
+
+    monkeypatch.setattr(llm_client, "chat_json", llm_avec_echec)
+    r = evaluation.comparer_modeles(["modele-a", "modele-b"], n=4).set_index("modele")
+    assert r.loc["modele-a", "modele_reellement_utilise"] == "modele-a"     # pas de « nan »
+    assert r.loc["modele-b", "offres_comparees"] == r.loc["modele-b", "offres"] - 1
+    assert r.loc["modele-b", "accord_competences_jaccard"] == 1.0

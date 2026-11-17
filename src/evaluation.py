@@ -187,6 +187,12 @@ def jaccard(a: list[str], b: list[str]) -> float:
     return len(a & b) / len(a | b) if a | b else 1.0
 
 
+def _egal(a, b) -> bool:
+    """Égalité où deux valeurs absentes (None / NaN) comptent comme identiques."""
+    vide = lambda v: v is None or (isinstance(v, float) and math.isnan(v)) or v is pd.NA  # noqa: E731
+    return (vide(a) and vide(b)) or (not vide(a) and not vide(b) and a == b)
+
+
 def comparer_modeles(modeles: list[str], n: int = 30) -> pd.DataFrame:
     offres = storage.lire("SELECT * FROM offres WHERE source != 'data_jobs'")
     ech = _echantillon(offres, n // 2)
@@ -201,20 +207,34 @@ def comparer_modeles(modeles: list[str], n: int = 30) -> pd.DataFrame:
                 comp, niv, ct, ok = extraction.normaliser_liste(x.competences), x.niveau_experience, x.type_contrat, True
             except Exception:
                 comp, niv, ct, ok = [], None, None, False
-            details.append({"modele": m, "offre_id": o["offre_id"], "echelle": o["echelle"], "succes": ok,
+            details.append({"modele": m, "modele_servi": llm_client.dernier_appel.get("modele_servi"),
+                            "offre_id": o["offre_id"], "echelle": o["echelle"], "succes": ok,
                             "json_1er_essai": ok and llm_client.dernier_appel.get("essais") == 1,
                             "duree_s": round(time.time() - t, 2), "competences": comp, "niveau": niv, "contrat": ct})
-    d = pd.DataFrame(details)
+    d = pd.DataFrame(details).astype({"niveau": object, "contrat": object})
     ref = d[d["modele"] == modeles[0]].set_index("offre_id")
-    d["jaccard_vs_ref"] = [jaccard(r["competences"], ref.loc[r["offre_id"], "competences"]) for _, r in d.iterrows()]
-    d["meme_niveau_que_ref"] = [r["niveau"] == ref.loc[r["offre_id"], "niveau"] for _, r in d.iterrows()]
-    d["meme_contrat_que_ref"] = [r["contrat"] == ref.loc[r["offre_id"], "contrat"] for _, r in d.iterrows()]
+    # Accord calculé seulement sur les offres réussies par le modèle ET par la référence
+    comparable = [bool(r["succes"] and ref.loc[r["offre_id"], "succes"]) for _, r in d.iterrows()]
+    d["jaccard_vs_ref"] = [jaccard(r["competences"], ref.loc[r["offre_id"], "competences"]) if ok else np.nan
+                           for ok, (_, r) in zip(comparable, d.iterrows())]
+    d["meme_niveau_que_ref"] = [float(_egal(r["niveau"], ref.loc[r["offre_id"], "niveau"])) if ok else np.nan
+                                for ok, (_, r) in zip(comparable, d.iterrows())]
+    d["meme_contrat_que_ref"] = [float(_egal(r["contrat"], ref.loc[r["offre_id"], "contrat"])) if ok else np.nan
+                                 for ok, (_, r) in zip(comparable, d.iterrows())]
+    d["comparable"] = comparable
     d["nb_competences"] = d["competences"].apply(len)
     resume = d.groupby("modele", sort=False).agg(
-        offres=("offre_id", "count"), pct_succes=("succes", "mean"), pct_json_1er_essai=("json_1er_essai", "mean"),
+        offres=("offre_id", "count"), offres_comparees=("comparable", "sum"),
+        pct_succes=("succes", "mean"), pct_json_1er_essai=("json_1er_essai", "mean"),
         duree_moy_s=("duree_s", "mean"), competences_moy=("nb_competences", "mean"),
         accord_competences_jaccard=("jaccard_vs_ref", "mean"), accord_niveau=("meme_niveau_que_ref", "mean"),
-        accord_contrat=("meme_contrat_que_ref", "mean")).round(3).reset_index()
+        accord_contrat=("meme_contrat_que_ref", "mean"),
+        modele_reellement_utilise=("modele_servi", lambda v: ", ".join(sorted({str(x) for x in v if pd.notna(x) and x})) or "?"),
+    ).round(3).reset_index()
+    for _, r in resume.iterrows():
+        if r["modele_reellement_utilise"] not in ("?", r["modele"]):
+            print(f"ATTENTION : {r['modele']} demandé, mais LM Studio a répondu avec {r['modele_reellement_utilise']}. "
+                  "Charge le bon modèle dans LM Studio (ou active le chargement automatique) puis relance.")
     MODELS_DIR.mkdir(exist_ok=True)
     resume.to_csv(MODELS_DIR / "comparaison_modeles.csv", **CSV)
     d.assign(competences=d["competences"].apply(", ".join)).to_csv(MODELS_DIR / "comparaison_modeles_details.csv", **CSV)

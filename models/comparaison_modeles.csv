@@ -1,0 +1,3 @@
+﻿modele;offres;offres_comparees;pct_succes;pct_json_1er_essai;duree_moy_s;competences_moy;accord_competences_jaccard;accord_niveau;accord_contrat;modele_reellement_utilise
+qwen2.5-7b-instruct;30;30;1.0;1.0;5.772;8.5;1.0;1.0;1.0;qwen2.5-7b-instruct
+qwen2.5-3b-instruct;30;30;1.0;1.0;2.813;8.867;0.497;0.533;0.567;qwen2.5-3b-instruct

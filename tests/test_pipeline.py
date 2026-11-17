@@ -39,8 +39,9 @@ class FauxLLM:
         llm_client.dernier_appel.update(essais=1, succes=True, duree_s=0.01, erreur=None)
         if schema is extraction.OffreExtraite:
             comp = ["Python", "SQL"] if "SQL" in utilisateur or "ML" in utilisateur else ["Power BI", "MS Excel"]
-            return schema(competences=comp, niveau_experience="Débutant", annees_experience_min=0,
-                          type_contrat="CDI", teletravail=None, resume="Poste d'analyste de données.")
+            return schema(competences=comp, niveau_experience=None if "Intern" in utilisateur else "Débutant",
+                          annees_experience_min=0, type_contrat=None if "Sales" in utilisateur else "CDI",
+                          teletravail=None, resume="Poste d'analyste de données.")
         if schema is extraction.ProfilExtrait:
             return schema(competences=["Python", "SQL", "Power BI"], experiences=["Stage data, 6 mois"],
                           formation=["Master 2"], resume="Profil data analyst.")
