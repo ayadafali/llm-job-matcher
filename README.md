@@ -71,6 +71,30 @@ python -m pytest -q
 
 > Si une ancienne base `data/processed/job_matcher.db` existe, la supprimer avant la première ingestion.
 
+## Interface (dashboard)
+
+```bash
+pip install -r requirements.txt     # une fois (Streamlit récent conseillé : pip install -U streamlit)
+streamlit run dashboard/app.py      # s'ouvre sur http://localhost:8501
+```
+
+Il faut la base `data/processed/job_matcher.db` (hors Git) : la copier depuis la machine où le pipeline a tourné.
+
+- **Mes offres** : importer un CV en PDF → le texte est lu, le LLM extrait les compétences, toutes les offres
+  sont notées, puis affichées en cartes (score, compétences possédées / à acquérir, résumé, lien, détail du score).
+  Nécessite LM Studio lancé avec le serveur démarré. Filtres, recherche, export CSV.
+- **Annotation** : noter la pertinence des offres et vérifier les extractions du LLM, sans Excel.
+  1. Si les fichiers n'existent pas : choisir le profil puis « Préparer les fichiers à annoter ».
+  2. Lire les **Consignes** (bouton 📋), surtout si on annote à plusieurs, pour noter de la même façon.
+  3. **Pertinence** : touches **2 / 1 / 0** (passe à l'offre suivante), **← →** pour naviguer,
+     **N** pour la prochaine non annotée. Chaque note est enregistrée immédiatement dans `eval/`.
+  4. **Contrôle de l'extraction** : Correct / Faux pour les compétences, le niveau et le contrat, puis « Enregistrer ».
+  5. « Calculer les métriques » → résultats dans l'onglet **Évaluation**.
+
+  Les fichiers annotés (`eval/annotation_matching.csv`, `eval/controle_extraction.csv`) restent locaux (ils
+  contiennent des extraits d'offres France Travail) : annoter sur une seule machine, ou se les transmettre.
+  Raccourcis clavier : version récente de Streamlit (sinon ils sont désactivés, les boutons restent utilisables).
+
 ## Limites connues
 
 - Les deux échelles n'ont pas la même date : LinkedIn 2023-2024, France Travail = offres actives à la collecte.
